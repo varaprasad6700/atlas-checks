@@ -11,7 +11,9 @@ import java.util.stream.Collectors;
 import org.openstreetmap.atlas.checks.base.BaseCheck;
 import org.openstreetmap.atlas.checks.flag.CheckFlag;
 import org.openstreetmap.atlas.geography.Heading;
+import org.openstreetmap.atlas.geography.atlas.items.AtlasEntity;
 import org.openstreetmap.atlas.geography.atlas.items.AtlasObject;
+import org.openstreetmap.atlas.geography.atlas.items.ItemType;
 import org.openstreetmap.atlas.geography.atlas.items.Line;
 import org.openstreetmap.atlas.geography.atlas.items.Relation;
 import org.openstreetmap.atlas.geography.atlas.items.RelationMember;
@@ -27,13 +29,14 @@ import org.openstreetmap.atlas.utilities.scalars.Angle;
  *
  * @author gpogulsky
  * @author bbreithaupt
+ * @author vp-24
  */
 public class InvalidTurnRestrictionCheck extends BaseCheck<Long>
 {
     private static final List<String> FALLBACK_INSTRUCTIONS = Collections.singletonList(
             "Relation ID: {0,number,#} is marked as turn restriction, but it is not well-formed: {1}");
     private static final String MISSING_TO_FROM_VIA_INSTRUCTION = "Missing a FROM and/or TO member and/or VIA member";
-    private static final String INVALID_MEMBER_TYPE_INSTRUCTION = "Invalid member type: ways are disused or under construction ";
+    private static final String INVALID_MEMBER_TYPE_INSTRUCTION = "Invalid member type: %s";
     private static final String TOPOLOGY_NOT_MATCH_RESTRICTION_INSTRUCTION = "Restriction doesn't match topology";
     private static final String UNKNOWN_ISSUE = "Unable to specify issue";
     private static final Map<String, String> INVALID_REASON_INSTRUCTION_MAP = new HashMap<>();
@@ -102,11 +105,17 @@ public class InvalidTurnRestrictionCheck extends BaseCheck<Long>
                     relation.getOsmIdentifier(), MISSING_TO_FROM_VIA_INSTRUCTION)));
         }
 
+        final List<ItemType> relationLineMembers = relation.members().stream()
+                .map(RelationMember::getEntity)
+                .filter(atlasEntity -> atlasEntity instanceof Line
+                        || atlasEntity instanceof Relation)
+                .map(AtlasEntity::getType).distinct().sorted().collect(Collectors.toList());
         // Restriction relation, bad member type
-        if (relation.members().stream().anyMatch(member -> member.getEntity() instanceof Line))
+        if (!relationLineMembers.isEmpty())
         {
-            return Optional.of(createFlag(members, this.getLocalizedInstruction(0,
-                    relation.getOsmIdentifier(), INVALID_MEMBER_TYPE_INSTRUCTION)));
+            return Optional.of(
+                    createFlag(members, this.getLocalizedInstruction(0, relation.getOsmIdentifier(),
+                            this.getInvalidMemberTypeInstruction(relationLineMembers))));
         }
 
         // Build a turn restriction
@@ -156,6 +165,13 @@ public class InvalidTurnRestrictionCheck extends BaseCheck<Long>
         }
 
         return instruction;
+    }
+
+    private String getInvalidMemberTypeInstruction(final List<ItemType> entityTypes)
+    {
+        final String invalidMembers = entityTypes.stream().map(ItemType::toString)
+                .map(String::toLowerCase).collect(Collectors.joining(" and "));
+        return String.format(INVALID_MEMBER_TYPE_INSTRUCTION, invalidMembers);
     }
 
     /**

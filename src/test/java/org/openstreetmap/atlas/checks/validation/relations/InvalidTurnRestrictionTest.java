@@ -51,6 +51,14 @@ public class InvalidTurnRestrictionTest
     }
 
     @Test
+    public void invalidRelationMemberAtlas()
+    {
+        this.verifier.actual(this.testCaseRule.getInvalidMemberAtlas(), testCheck);
+        this.verifier.verify(flag -> Assert.assertTrue(
+                flag.getInstructions().contains("Invalid member type: line and relation")));
+    }
+
+    @Test
     public void noRightTurnTopologyTest()
     {
         this.verifier.actual(this.testCaseRule.noRightTurnTopologyAtlas(), testCheck);
